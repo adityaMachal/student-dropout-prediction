@@ -194,7 +194,7 @@ with tab1:
         )
         fig_pie.update_traces(textinfo="label+percent+value", textfont_size=13)
         fig_pie.update_layout(height=420)
-        st.plotly_chart(fig_pie, use_container_width=True)
+        st.plotly_chart(fig_pie, width="stretch")
 
     with col_t2:
         st.markdown("#### Predicted Dropout Probability Distribution")
@@ -211,7 +211,7 @@ with tab1:
         fig_hist.add_vline(x=0.60, line_dash="dash", line_color="red", annotation_text="High Risk Threshold (0.60)")
         fig_hist.add_vline(x=0.35, line_dash="dash", line_color="orange", annotation_text="Moderate Risk (0.35)")
         fig_hist.update_layout(height=420)
-        st.plotly_chart(fig_hist, use_container_width=True)
+        st.plotly_chart(fig_hist, width="stretch")
 
     st.markdown("#### Risk Level Segmented by Demographics & Study Mode")
     col_sub1, col_sub2 = st.columns(2)
@@ -225,7 +225,7 @@ with tab1:
             color_discrete_map={"High Risk": "#d62728", "Moderate Risk": "#ff7f0e", "Low Risk": "#2ca02c"},
             labels={"Study_Mode_Label": "Study Mode"}
         )
-        st.plotly_chart(fig_mode, use_container_width=True)
+        st.plotly_chart(fig_mode, width="stretch")
 
     with col_sub2:
         fig_schol = px.histogram(
@@ -237,7 +237,7 @@ with tab1:
             color_discrete_map={"High Risk": "#d62728", "Moderate Risk": "#ff7f0e", "Low Risk": "#2ca02c"},
             labels={"Scholarship_Label": "Has Scholarship"}
         )
-        st.plotly_chart(fig_schol, use_container_width=True)
+        st.plotly_chart(fig_schol, width="stretch")
 
 # ---------------------------------------------------------
 # Tab 2: Compulsory Requirement 2 — Actual vs. Predicted Outcomes
@@ -265,7 +265,7 @@ with tab2:
             title="Confusion Matrix"
         )
         fig_cm.update_layout(height=420)
-        st.plotly_chart(fig_cm, use_container_width=True)
+        st.plotly_chart(fig_cm, width="stretch")
 
         st.info(f"""
         **Diagnostic Summary:**
@@ -300,7 +300,7 @@ with tab2:
             color_discrete_sequence=["#1f77b4", "#ff7f0e"]
         )
         fig_bar.update_layout(height=420)
-        st.plotly_chart(fig_bar, use_container_width=True)
+        st.plotly_chart(fig_bar, width="stretch")
 
     st.markdown("#### Model Performance Benchmark Comparison")
     if metrics:
@@ -312,7 +312,13 @@ with tab2:
             "Logistic Regression": [lr_m.get("roc_auc", 0), lr_m.get("f1_score", 0), lr_m.get("precision", 0), lr_m.get("recall", 0), lr_m.get("dropout_recall", 0)],
             "Random Forest Classifier": [rf_m.get("roc_auc", 0), rf_m.get("f1_score", 0), rf_m.get("precision", 0), rf_m.get("recall", 0), rf_m.get("dropout_recall", 0)]
         })
-        st.dataframe(bench_table.style.highlight_max(axis=1, color="#d4edda"), hide_index=True, use_container_width=True)
+        model_cols = ["Logistic Regression", "Random Forest Classifier"]
+        styled_bench = bench_table.style.format(
+            "{:.4f}", subset=model_cols
+        ).highlight_max(
+            axis=1, subset=model_cols, color="#d4edda"
+        )
+        st.dataframe(styled_bench, hide_index=True, width="stretch")
 
 # ---------------------------------------------------------
 # Tab 3: Compulsory Requirement 3 — Dropout Rates by Academic Program
@@ -359,7 +365,7 @@ with tab3:
         height=580,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
-    st.plotly_chart(fig_prog, use_container_width=True)
+    st.plotly_chart(fig_prog, width="stretch")
 
     st.markdown("#### Academic Program Risk & Attrition Data Table")
     display_prog = prog_stats[[
@@ -373,7 +379,7 @@ with tab3:
             "Predicted_Dropout_Rate_Pct": "{:.1f}%"
         }),
         hide_index=True,
-        use_container_width=True
+        width="stretch"
     )
 
 # ---------------------------------------------------------
@@ -443,7 +449,7 @@ with tab4:
             with f6:
                 sem2_grade = st.slider("2nd Sem Average Grade (0-20)", 0.0, 20.0, 12.5, step=0.5)
 
-            calc_btn = st.form_submit_button("🚀 Run PySpark Dropout Risk Assessment", use_container_width=True)
+            calc_btn = st.form_submit_button("🚀 Run PySpark Dropout Risk Assessment", width="stretch")
 
         if calc_btn:
             with st.spinner("Processing through PySpark MLlib Pipeline..."):
@@ -525,7 +531,7 @@ with tab5:
     st.dataframe(
         display_roster.style.format({"Dropout Risk Prob": "{:.1%}"}),
         hide_index=True,
-        use_container_width=True
+        width="stretch"
     )
 
     # Download button for advisors
