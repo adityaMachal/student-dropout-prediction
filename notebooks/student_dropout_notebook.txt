@@ -1,0 +1,393 @@
+================================================================================
+PREDICTING STUDENT DROPOUT RISK (TASKS 97-101) - JUPYTER NOTEBOOK COMMANDS
+Copy and paste each cell block directly into your Jupyter Notebook:
+Location: notebooks/01_dropout_research_eda.ipynb
+================================================================================
+
+### CELL 1: Environment & SparkSession Setup
+# ------------------------------------------------------------------------------
+import os
+import sys
+import warnings
+
+# Suppress harmless pandas / arrow / incubator warnings
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=FutureWarning)
+
+# Configure environment to use /opt/spark
+os.environ["SPARK_HOME"] = "/opt/spark"
+sys.path.insert(0, "/opt/spark/python/lib/py4j-0.10.9.9-src.zip")
+sys.path.insert(0, "/opt/spark/python")
+
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col, when, count, round, avg, isnan
+
+# Initialize local SparkSession and force local filesystem (bypasses HDFS port 9000)
+spark = (
+    SparkSession.builder
+    .appName("Student_Dropout_Risk_Phase1")
+    .master("local[*]")
+    .config("spark.driver.memory", "4g")
+    .config("spark.sql.shuffle.partitions", "8")
+    .config("spark.hadoop.fs.defaultFS", "file:///")
+    .config("spark.sql.execution.arrow.pyspark.enabled", "false")
+    .getOrCreate()
+)
+
+print(f"✅ PySpark version: {spark.version} (configured to local filesystem)")
+
+
+### CELL 2: Task 97 - Data Loading & Schema Inspection
+# ------------------------------------------------------------------------------
+import os
+
+# Load dataset from src/data/dataset.csv
+data_path = f"file://{os.path.abspath('../src/data/dataset.csv')}"
+print(f"Reading from: {data_path}")
+
+df_raw = spark.read.csv(data_path, header=True, inferSchema=True)
+
+total_students = df_raw.count()
+total_columns = len(df_raw.columns)
+print(f"✅ Successfully loaded! Total Students: {total_students:,}")
+print(f"Total Columns: {total_columns}")
+
+print("\n--- Raw Target Distribution ---")
+df_raw.groupBy("Target").count().orderBy("count", ascending=False).show()
+
+df_raw.printSchema()
+
+
+### CELL 3: Task 97 - Binary Target Mapping & Null Value Handling
+# ------------------------------------------------------------------------------
+# Map Target to Binary Dropout Risk:
+# 1.0 = Dropout (At Risk)
+# 0.0 = Graduate or Enrolled (Retained / Safe)
+df_clean = df_raw.withColumn(
+    "label",
+    when(col("Target") == "Dropout", 1.0).otherwise(0.0)
+)
+
+# Cast categorical codes to StringType for proper StringIndexer encoding
+cat_cols_to_cast = [
+    "Course",
+    "Daytime/evening attendance",
+    "Marital status",
+    "Gender",
+    "Scholarship holder",
+    "Tuition fees up to date",
+    "Debtor",
+    "Displaced"
+]
+
+for c in cat_cols_to_cast:
+    df_clean = df_clean.withColumn(c, col(c).cast("string"))
+
+# Check for null/missing values across all columns
+null_counts = [
+    df_clean.filter(col(c).isNull() | isnan(c)).count() if t in ["double", "float"]
+    else df_clean.filter(col(c).isNull()).count()
+    for c, t in df_clean.dtypes
+]
+
+null_report = [(c, n) for (c, _), n in zip(df_clean.dtypes, null_counts) if n > 0]
+if null_report:
+    print("Columns with Null Values:", null_report)
+else:
+    print("✅ Zero null values detected! Dataset is clean and ready for modeling.")
+
+df_clean.select("Course", "Daytime/evening attendance", "Target", "label").show(5)
+
+
+### CELL 4: Exploratory Analysis (Dropout Rates by Cohort & Study Mode)
+# ------------------------------------------------------------------------------
+print("--- Dropout Rate by Study Mode (1 = Daytime, 0 = Evening) ---")
+df_clean.groupBy("Daytime/evening attendance").agg(
+    count("*").alias("Total_Students"),
+    round(avg("label") * 100, 2).alias("Dropout_Rate_Pct")
+).orderBy("Dropout_Rate_Pct", ascending=False).show()
+
+print("--- Dropout Rate by Scholarship Status (1 = Yes, 0 = No) ---")
+df_clean.groupBy("Scholarship holder").agg(
+    count("*").alias("Total_Students"),
+    round(avg("label") * 100, 2).alias("Dropout_Rate_Pct")
+).orderBy("Dropout_Rate_Pct", ascending=False).show()
+
+print("--- Dropout Rate by Tuition Fees Up to Date (1 = Yes, 0 = No) ---")
+df_clean.groupBy("Tuition fees up to date").agg(
+    count("*").alias("Total_Students"),
+    round(avg("label") * 100, 2).alias("Dropout_Rate_Pct")
+).orderBy("Dropout_Rate_Pct", ascending=False).show()
+
+print("--- Top 5 Academic Courses with Highest Dropout Rates ---")
+df_clean.groupBy("Course").agg(
+    count("*").alias("Total_Students"),
+    round(avg("label") * 100, 2).alias("Dropout_Rate_Pct")
+).orderBy("Dropout_Rate_Pct", ascending=False).show(5)
+
+
+### CELL 5: Visualizing Research Insights with Plotly (iframe renderer)
+# ------------------------------------------------------------------------------
+import plotly.express as px
+import plotly.io as pio
+
+# Force Plotly to display inline inside Jupyter Notebook
+pio.renderers.default = "iframe"
+
+# 1. Dropout Rate by Tuition & Scholarship Status
+summary_df = (
+    df_clean.groupBy("Scholarship holder", "Tuition fees up to date")
+    .agg(round(avg("label") * 100, 2).alias("Dropout_Rate_Pct"))
+    .toPandas()
+)
+
+fig1 = px.bar(
+    summary_df,
+    x="Scholarship holder",
+    y="Dropout_Rate_Pct",
+    color="Tuition fees up to date",
+    barmode="group",
+    title="Dropout Rate (%) by Scholarship & Tuition Fee Status",
+    labels={"Scholarship holder": "Has Scholarship (1=Yes, 0=No)", "Dropout_Rate_Pct": "Dropout Rate (%)"}
+)
+fig1.show()
+
+# 2. Approved Units Distribution: Dropouts vs. Graduates/Enrolled
+sample_eval = df_clean.select("label", "Curricular units 1st sem (approved)", "Curricular units 2nd sem (approved)").toPandas()
+sample_eval["Status"] = sample_eval["label"].map({1.0: "Dropout (At Risk)", 0.0: "Retained"})
+
+fig2 = px.box(
+    sample_eval,
+    x="Status",
+    y="Curricular units 1st sem (approved)",
+    color="Status",
+    title="1st Semester Approved Units: Dropouts vs. Retained Students"
+)
+fig2.show()
+
+
+### CELL 6: Task 98 - Feature Engineering Pipeline (Encoding & VectorAssembly)
+# ------------------------------------------------------------------------------
+from pyspark.ml.feature import StringIndexer, OneHotEncoder, VectorAssembler
+
+# Categorical columns
+categorical_cols = [
+    "Course",
+    "Daytime/evening attendance",
+    "Marital status",
+    "Gender",
+    "Scholarship holder",
+    "Tuition fees up to date",
+    "Debtor",
+    "Displaced"
+]
+
+# Numeric academic performance & engagement features
+numeric_cols = [
+    "Curricular units 1st sem (evaluations)",
+    "Curricular units 1st sem (approved)",
+    "Curricular units 1st sem (grade)",
+    "Curricular units 2nd sem (evaluations)",
+    "Curricular units 2nd sem (approved)",
+    "Curricular units 2nd sem (grade)",
+    "Age at enrollment",
+    "Unemployment rate",
+    "Inflation rate",
+    "GDP"
+]
+
+indexed_cols = [f"{c}_idx" for c in categorical_cols]
+encoded_cols = [f"{c}_vec" for c in categorical_cols]
+
+# 1. StringIndexer
+indexer = StringIndexer(
+    inputCols=categorical_cols,
+    outputCols=indexed_cols,
+    handleInvalid="keep"
+)
+
+# 2. OneHotEncoder
+encoder = OneHotEncoder(
+    inputCols=indexed_cols,
+    outputCols=encoded_cols
+)
+
+# 3. VectorAssembler
+assembler_inputs = numeric_cols + encoded_cols
+assembler = VectorAssembler(
+    inputCols=assembler_inputs,
+    outputCol="features",
+    handleInvalid="skip"
+)
+
+print(f"✅ Feature pipeline configured! Assembly inputs: {len(assembler_inputs)} features.")
+
+
+### CELL 7: Task 99 - Train Classification Models (LR & Random Forest)
+# ------------------------------------------------------------------------------
+from pyspark.ml import Pipeline
+from pyspark.ml.classification import LogisticRegression, RandomForestClassifier
+
+# 80% Train, 20% Holdout Test Split
+train_df, test_df = df_clean.randomSplit([0.8, 0.2], seed=42)
+print(f"Training samples: {train_df.count():,}, Holdout Testing samples: {test_df.count():,}")
+
+# Model 1: Logistic Regression Pipeline
+lr = LogisticRegression(
+    featuresCol="features",
+    labelCol="label",
+    maxIter=30,
+    regParam=0.01,
+    elasticNetParam=0.5
+)
+pipeline_lr = Pipeline(stages=[indexer, encoder, assembler, lr])
+
+# Model 2: Random Forest Classifier Pipeline
+rf = RandomForestClassifier(
+    featuresCol="features",
+    labelCol="label",
+    numTrees=80,
+    maxDepth=8,
+    seed=42
+)
+pipeline_rf = Pipeline(stages=[indexer, encoder, assembler, rf])
+
+print("Training Logistic Regression Model...")
+model_lr = pipeline_lr.fit(train_df)
+
+print("Training Random Forest Classifier Model...")
+model_rf = pipeline_rf.fit(train_df)
+print("✅ Both classification models trained successfully!")
+
+
+### CELL 8: Task 100 - Comprehensive Evaluation (Precision, Recall, F1, ROC-AUC)
+# ------------------------------------------------------------------------------
+import pandas as pd
+from pyspark.ml.evaluation import MulticlassClassificationEvaluator, BinaryClassificationEvaluator
+
+# Score test set
+preds_lr = model_lr.transform(test_df)
+preds_rf = model_rf.transform(test_df)
+
+# Initialize Spark evaluators
+eval_f1 = MulticlassClassificationEvaluator(labelCol="label", predictionCol="prediction", metricName="f1")
+eval_precision = MulticlassClassificationEvaluator(labelCol="label", predictionCol="prediction", metricName="weightedPrecision")
+eval_recall = MulticlassClassificationEvaluator(labelCol="label", predictionCol="prediction", metricName="weightedRecall")
+eval_auc = BinaryClassificationEvaluator(labelCol="label", rawPredictionCol="rawPrediction", metricName="areaUnderROC")
+
+# Compile side-by-side benchmark comparison
+benchmark_data = {
+    "Evaluation Metric": [
+        "ROC-AUC (Discrimination Power)",
+        "F1-Score (Balanced Accuracy)",
+        "Precision (Positive Predictive Value)",
+        "Recall (Dropout Sensitivity)"
+    ],
+    "Logistic Regression": [
+        eval_auc.evaluate(preds_lr),
+        eval_f1.evaluate(preds_lr),
+        eval_precision.evaluate(preds_lr),
+        eval_recall.evaluate(preds_lr)
+    ],
+    "Random Forest Classifier": [
+        eval_auc.evaluate(preds_rf),
+        eval_f1.evaluate(preds_rf),
+        eval_precision.evaluate(preds_rf),
+        eval_recall.evaluate(preds_rf)
+    ]
+}
+
+benchmark_table = pd.DataFrame(benchmark_data)
+benchmark_table
+
+
+### CELL 9: Task 101 - Holdout Test Scoring & 3-Tier Risk Categorization
+# ------------------------------------------------------------------------------
+from pyspark.ml.functions import vector_to_array
+
+# Extract continuous probability of dropping out (index 1 in the probability vector)
+scored_test = preds_rf.withColumn("dropout_probability", vector_to_array(col("probability"))[1])
+
+# Apply 3-Tier Early Warning Risk Categorization:
+# High Risk:     P >= 0.60 (Immediate advisor intervention needed)
+# Moderate Risk: 0.35 <= P < 0.60 (Monitor closely & tutoring support)
+# Low Risk:      P < 0.35 (On track to graduate)
+scored_test = scored_test.withColumn(
+    "risk_level",
+    when(col("dropout_probability") >= 0.60, "High Risk")
+    .when(col("dropout_probability") >= 0.35, "Moderate Risk")
+    .otherwise("Low Risk")
+)
+
+print("Sample Dropout Risk Predictions:")
+scored_test.select(
+    "Course",
+    "Daytime/evening attendance",
+    "Curricular units 1st sem (approved)",
+    "Curricular units 2nd sem (approved)",
+    "dropout_probability",
+    "risk_level",
+    "prediction",
+    "label"
+).show(10)
+
+
+### CELL 10: Task 101 - Export Scored Predictions for Dashboard
+# ------------------------------------------------------------------------------
+import os
+
+export_cols = [
+    "Course",
+    "Daytime/evening attendance",
+    "Scholarship holder",
+    "Tuition fees up to date",
+    "Debtor",
+    "Age at enrollment",
+    "Curricular units 1st sem (evaluations)",
+    "Curricular units 1st sem (approved)",
+    "Curricular units 1st sem (grade)",
+    "Curricular units 2nd sem (evaluations)",
+    "Curricular units 2nd sem (approved)",
+    "Curricular units 2nd sem (grade)",
+    "dropout_probability",
+    "risk_level",
+    "prediction",
+    "label"
+]
+
+os.makedirs("../output", exist_ok=True)
+pdf_export = scored_test.select(export_cols).toPandas()
+csv_output_path = "../output/test_dropout_predictions.csv"
+pdf_export.to_csv(csv_output_path, index=False)
+print(f"✅ Successfully exported {len(pdf_export):,} scored student predictions to: {csv_output_path}")
+
+
+### CELL 11: Phase 1 Visual Summary - Risk Tier Cohort Breakdown
+# ------------------------------------------------------------------------------
+import plotly.express as px
+
+# 1. Risk Level Distribution
+risk_counts = pdf_export["risk_level"].value_counts().reset_index()
+risk_counts.columns = ["Risk Tier", "Number of Students"]
+
+fig_pie = px.pie(
+    risk_counts,
+    names="Risk Tier",
+    values="Number of Students",
+    color="Risk Tier",
+    color_discrete_map={"High Risk": "#d62728", "Moderate Risk": "#ff7f0e", "Low Risk": "#2ca02c"},
+    title="Cohort Distribution by Dropout Risk Tier"
+)
+fig_pie.show()
+
+# 2. Predicted Probability vs. Actual Status
+pdf_export["Actual Status"] = pdf_export["label"].map({1.0: "Dropout", 0.0: "Retained"})
+fig_hist = px.histogram(
+    pdf_export,
+    x="dropout_probability",
+    color="Actual Status",
+    nbins=40,
+    title="Predicted Dropout Probability Distribution by Actual Status",
+    labels={"dropout_probability": "Predicted Probability of Dropping Out"}
+)
+fig_hist.show()

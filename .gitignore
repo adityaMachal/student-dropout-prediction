@@ -1,0 +1,41 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Large datasets and downloads
+data/
+src/data/
+**/data/*.csv
+**/data/*.zip
+*.zip
+*.tar.gz
+
+# Model artifacts and serialized pipelines
+models/
+*.model/
+*.parquet
+
+# Output data exports
+output/*.csv
+output/predictions/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# OS-specific files
+.DS_Store
+Thumbs.db

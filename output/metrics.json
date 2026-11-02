@@ -1,0 +1,19 @@
+{
+    "logistic_regression": {
+        "roc_auc": 0.8938,
+        "f1_score": 0.8537,
+        "precision": 0.8631,
+        "recall": 0.86,
+        "dropout_recall": 0.6558
+    },
+    "random_forest": {
+        "roc_auc": 0.9082,
+        "f1_score": 0.8584,
+        "precision": 0.865,
+        "recall": 0.8636,
+        "dropout_recall": 0.6775
+    },
+    "total_students": 4424,
+    "train_samples": 3581,
+    "test_samples": 843
+}
