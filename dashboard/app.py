@@ -156,7 +156,7 @@ kpi5.metric("🚨 High Risk Cohort", f"{high_risk_count:,} ({high_risk_pct:.1f}%
 st.markdown("---")
 
 # ---------------------------------------------------------
-# Tabs: Covering Compulsory 1, 2, 3 + Live Serving & Roster
+# Tabs: Covering  1, 2, 3 + Live Serving & Roster
 # ---------------------------------------------------------
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "🚨 1. Risk Categories",
@@ -167,10 +167,10 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 ])
 
 # ---------------------------------------------------------
-# Tab 1: Compulsory Requirement 1 — Risk Categories
+# Tab 1:  Requirement 1 — Risk Categories
 # ---------------------------------------------------------
 with tab1:
-    st.subheader("Compulsory 1: Student Risk Categories & Distribution")
+    st.subheader(" 1: Student Risk Categories & Distribution")
     st.caption("Early-Warning Risk Tiers: High Risk (P ≥ 0.60), Moderate Risk (0.35 ≤ P < 0.60), Low Risk (P < 0.35)")
 
     col_t1, col_t2 = st.columns([1, 1])
@@ -240,10 +240,10 @@ with tab1:
         st.plotly_chart(fig_schol, width="stretch")
 
 # ---------------------------------------------------------
-# Tab 2: Compulsory Requirement 2 — Actual vs. Predicted Outcomes
+# Tab 2:  Requirement 2 — Actual vs. Predicted Outcomes
 # ---------------------------------------------------------
 with tab2:
-    st.subheader("Compulsory 2: Actual vs. Predicted Dropout Outcomes")
+    st.subheader(" 2: Actual vs. Predicted Dropout Outcomes")
     st.caption("Fidelity evaluation comparing actual student outcomes against model classifications.")
 
     col_m1, col_m2 = st.columns([1, 1])
@@ -321,10 +321,10 @@ with tab2:
         st.dataframe(styled_bench, hide_index=True, width="stretch")
 
 # ---------------------------------------------------------
-# Tab 3: Compulsory Requirement 3 — Dropout Rates by Academic Program
+# Tab 3:  Requirement 3 — Dropout Rates by Academic Program
 # ---------------------------------------------------------
 with tab3:
-    st.subheader("Compulsory 3: Dropout Rates by Academic Program")
+    st.subheader(" 3: Dropout Rates by Academic Program")
     st.caption("Comparison of actual student attrition rate vs. model predicted attrition rate across degree programs.")
 
     # Calculate Actual and Predicted Dropout Rates by Academic Program
